@@ -1,0 +1,9 @@
+venv/
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+model/plant_disease_model.h5
+static/uploads/*
+!static/uploads/.gitkeep
+plant_history.db

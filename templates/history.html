@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detection History - PlantCare AI</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="logo">
+            <i class="fas fa-leaf"></i>
+            <span>{{ lang.title }}</span>
+        </div>
+        <div class="nav-links">
+            <a href="/">{{ lang.home }}</a>
+            <a href="/history">{{ lang.history }}</a>
+            <div class="lang-switcher">
+                <a href="/set_language/en" class="{% if current_lang == 'en' %}active{% endif %}">EN</a>
+                <a href="/set_language/ta" class="{% if current_lang == 'ta' %}active{% endif %}">தமிழ்</a>
+                <a href="/set_language/kn" class="{% if current_lang == 'kn' %}active{% endif %}">ಕನ್ನಡ</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <header class="hero">
+            <h1>{{ lang.history }}</h1>
+            <p>Keep track of your plant health journey and past diagnoses.</p>
+        </header>
+
+        <div class="history-table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>{{ lang.image }}</th>
+                        <th>{{ lang.diagnosis }}</th>
+                        <th>{{ lang.confidence }}</th>
+                        <th>{{ lang.date }}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for record in records %}
+                    <tr>
+                        <td>
+                            <img src="{{ url_for('static', filename='uploads/' + record.image_path) }}" class="history-img" alt="Plant">
+                        </td>
+                        <td>
+                            {% if 'healthy' in record.prediction.lower() %}
+                                <strong style="color: #4caf50;">{{ record.prediction.replace('___', ' ') }}</strong>
+                                <span class="status-badge healthy-badge">Healthy</span>
+                            {% else %}
+                                <strong style="color: #f44336;">{{ record.prediction.replace('___', ' ') }}</strong>
+                                <span class="status-badge diseased-badge">Diseased</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="confidence-badge">{{ (record.confidence * 100)|round(2) }}%</span>
+                        </td>
+                        <td>{{ record.timestamp.strftime('%B %d, %Y - %H:%M') }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="4" style="text-align: center; padding: 3rem; color: var(--text-muted);">
+                            No history found. Start by scanning a plant!
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</body>
+</html>
