@@ -24,6 +24,10 @@ app = Flask(__name__)
 # Base Directory Setup
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 UPLOAD_FOLDER = os.path.join(BASE_DIR, 'static', 'uploads')
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp'}
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 # Fix 2: Secure Configuration
 app.secret_key = os.environ.get('SECRET_KEY', 'plantcare_premium_key_8822')
@@ -107,42 +111,43 @@ def load_plant_model():
         except Exception as e:
             logger.error(f"Model load error: {e}")
 
+PLANT_INSIGHTS = {
+    "Apple Black rot": {"treatment": "Prune infected branches.", "prevention": "Improve air circulation."},
+    "Apple healthy": {"treatment": "None.", "prevention": "Routine care."},
+    "Tomato Late blight": {"treatment": "Fungicides.", "prevention": "Dry leaves."},
+    "Tomato Early blight": {"treatment": "Organic spray.", "prevention": "Crop rotation."},
+    "Cherry healthy": {"treatment": "None.", "prevention": "Regular pruning."},
+    "Corn common rust": {"treatment": "Fungicide application.", "prevention": "Plant resistant hybrids."},
+    "Blueberry healthy": {"treatment": "None.", "prevention": "Maintain soil acidity."},
+    "Strawberry healthy": {"treatment": "None.", "prevention": "Mulching."},
+    "Strawberry leaf scorch": {"treatment": "Remove infected leaves.", "prevention": "Avoid excess nitrogen."},
+    "Grape healthy": {"treatment": "None.", "prevention": "Proper trellising."},
+    "Peach healthy": {"treatment": "None.", "prevention": "Thinning fruit."},
+    "Peach bacterial spot": {"treatment": "Copper sprays.", "prevention": "Windbreaks."},
+    "Pepper_bell bacterial spot": {"treatment": "Copper-based bactericides.", "prevention": "Seed treatment."},
+    "Pepper_bell healthy": {"treatment": "None.", "prevention": "Balanced fertilization."},
+    "Orange healthy": {"treatment": "None.", "prevention": "Nutrient sprays."},
+    "Orange huanglongbing": {"treatment": "Remove infected trees.", "prevention": "Control psyllid insects."},
+    "Potato early blight": {"treatment": "Fungicides.", "prevention": "Crop rotation."},
+    "Potato late blight": {"treatment": "Copper fungicides.", "prevention": "Eliminate cull piles."},
+    "Potato healthy": {"treatment": "None.", "prevention": "Certified seed tubers."},
+    "Grape black rot": {"treatment": "Mancozeb or Captan.", "prevention": "Sanitation."}
+}
+
 def model_predict(img_path):
     if MODEL is None or tf is None:
-        insights = {
-            "Apple Black rot": {"treatment": "Prune infected branches.", "prevention": "Improve air circulation."},
-            "Apple healthy": {"treatment": "None.", "prevention": "Routine care."},
-            "Tomato Late blight": {"treatment": "Fungicides.", "prevention": "Dry leaves."},
-            "Tomato Early blight": {"treatment": "Organic spray.", "prevention": "Crop rotation."},
-            "Cherry healthy": {"treatment": "None.", "prevention": "Regular pruning."},
-            "Corn common rust": {"treatment": "Fungicide application.", "prevention": "Plant resistant hybrids."},
-            "Blueberry healthy": {"treatment": "None.", "prevention": "Maintain soil acidity."},
-            "Strawberry healthy": {"treatment": "None.", "prevention": "Mulching."},
-            "Strawberry leaf scorch": {"treatment": "Remove infected leaves.", "prevention": "Avoid excess nitrogen."},
-            "Grape healthy": {"treatment": "None.", "prevention": "Proper trellising."},
-            "Peach healthy": {"treatment": "None.", "prevention": "Thinning fruit."},
-            "Peach bacterial spot": {"treatment": "Copper sprays.", "prevention": "Windbreaks."},
-            "Pepper_bell bacterial spot": {"treatment": "Copper-based bactericides.", "prevention": "Seed treatment."},
-            "Pepper_bell healthy": {"treatment": "None.", "prevention": "Balanced fertilization."},
-            "Orange healthy": {"treatment": "None.", "prevention": "Nutrient sprays."},
-            "Orange huanglongbing": {"treatment": "Remove infected trees.", "prevention": "Control psyllid insects."},
-            "Potato early blight": {"treatment": "Fungicides.", "prevention": "Crop rotation."},
-            "Potato late blight": {"treatment": "Copper fungicides.", "prevention": "Eliminate cull piles."},
-            "Potato healthy": {"treatment": "None.", "prevention": "Certified seed tubers."},
-            "Grape black rot": {"treatment": "Mancozeb or Captan.", "prevention": "Sanitation."}
-        }
-        import random
-        label = random.choice(list(insights.keys()))
-        return label, 0.98, insights[label]
+        label = random.choice(list(PLANT_INSIGHTS.keys()))
+        return label, 0.98, PLANT_INSIGHTS[label]
     
     img = tf.keras.preprocessing.image.load_img(img_path, target_size=(224, 224))
     x = tf.keras.preprocessing.image.img_to_array(img)
     x = np.expand_dims(x, axis=0) / 255.0
     preds = MODEL.predict(x)
     idx = np.argmax(preds[0])
-    label = CLASS_NAMES.get(idx, f"Class {idx}") if CLASS_NAMES else f"Class {idx}"
-    insight = {"treatment": "Consult expert.", "prevention": "Sunlight/Moisture control."}
-    return label, float(preds[0][idx]), insight
+    label = CLASS_NAMES.get(int(idx), f"Class {idx}") if CLASS_NAMES else f"Class {idx}"
+    clean_label = label.replace('___', ' ').replace('_', ' ')
+    insight = PLANT_INSIGHTS.get(clean_label, {"treatment": "Consult expert.", "prevention": "Sunlight/Moisture control."})
+    return clean_label, float(preds[0][idx]), insight
 
 @app.route('/')
 def index():
@@ -157,6 +162,8 @@ def predict():
         if 'file' not in request.files: return jsonify({'error': 'No file'}), 400
         file = request.files['file']
         if file and file.filename != '':
+            if not allowed_file(file.filename):
+                return jsonify({'error': 'Invalid file type. Please upload an image.'}), 400
             # Fix 3: Stable integer timestamp for safe filenames
             timestamp_id = int(datetime.now(timezone.utc).timestamp())
             safe_name = secure_filename(f"{timestamp_id}_{file.filename}")
@@ -170,13 +177,14 @@ def predict():
             db.session.commit()
             
             return jsonify({
-                'prediction': label.replace('___', ' '),
+                'prediction': label,
                 'confidence': f"{round(conf*100, 2)}%",
                 'image_url': url_for('static', filename=f'uploads/{safe_name}'),
                 'treatment': insight['treatment'],
                 'prevention': insight['prevention']
             })
     except Exception as e:
+        db.session.rollback()
         logger.error(f"Prediction Error: {e}")
         return jsonify({'error': 'Internal server error'}), 500
     return jsonify({'error': 'Invalid file'}), 400
