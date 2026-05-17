@@ -203,8 +203,9 @@ def page_not_found(e):
 def shutdown_session(exception=None):
     db.session.remove()
 
+with app.app_context():
+    db.create_all()
+    load_plant_model()
+
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
-        load_plant_model()
     app.run(debug=True, port=5000)
